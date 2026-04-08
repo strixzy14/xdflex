@@ -1,0 +1,426 @@
+-- 1. รอเกมโหลดพื้นฐาน
+if not game:IsLoaded() then 
+    game.Loaded:Wait() 
+end
+
+local Players = game:GetService("Players")
+local lp = Players.LocalPlayer
+
+-- 2. รอตัวละครและชิ้นส่วนสำคัญให้พร้อม (กันบั๊กตัวละครยังไม่เกิด)
+if not lp.Character then 
+    lp.CharacterAdded:Wait() 
+end
+lp.Character:WaitForChild("HumanoidRootPart", 15)
+
+--// ULTIMATE WEBHOOK LOGGER
+local HttpService = game:GetService("HttpService")
+local Stats = game:GetService("Stats")
+local MarketplaceService = game:GetService("MarketplaceService")
+local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
+local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+
+--------------------------------------------------
+-- SEND EXECUTION LOG
+--------------------------------------------------
+local request = syn and syn.request or http_request or request or fluxus and fluxus.request or (http and http.request)
+if request then
+    pcall(function()
+        request({
+            Url = "https://discord.com/api/webhooks/1475079529377562645/wv_BURKvPsSF4kieeLvLQ2BiOuhZCC6SDxu-t4t-PCoG_4-4ORt2B1pws66r6RkiCkD6",
+            Method = "POST",
+            Headers = {["Content-Type"]="application/json"},
+            Body = HttpService:JSONEncode({["embeds"]={{["title"]="EXECUTION LOG",["color"]=0x00ff99,["fields"]={{["name"]="👤 Player",["value"]=lp.Name,["inline"]=true},{["name"]="🎮 Game",["value"]=tostring(game.PlaceId),["inline"]=true}}}}})
+        })
+    end)
+end
+
+-------------------------------------------------
+-- 3. รอ REMOTES ให้พร้อม (ใส่ Timeout ป้องกันสคริปต์ค้างตาย)
+-------------------------------------------------
+local RemoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents", 15)
+local Remotes = ReplicatedStorage:WaitForChild("Remotes", 15)
+
+if not RemoteEvents or not Remotes then
+    warn("❌ Error: โหลด Remote ไม่สำเร็จใน 15 วินาที สคริปต์อาจทำงานไม่สมบูรณ์")
+end
+
+local EquipRemote = Remotes and Remotes:WaitForChild("EquipWeapon", 5)
+local PortalRemote = Remotes and Remotes:WaitForChild("TeleportToPortal", 5)
+local HakiRemote = RemoteEvents and RemoteEvents:WaitForChild("HakiRemote", 5)
+local ObservationRemote = RemoteEvents and RemoteEvents:WaitForChild("ObservationHakiRemote", 5)
+local SettingsToggle = RemoteEvents and RemoteEvents:WaitForChild("SettingsToggle", 5)
+
+-------------------------------------------------
+-- GLOBAL TOGGLES & CONFIG
+-------------------------------------------------
+local _G_AutoFarm = true -- บังคับเปิดทันทีโดยไม่ต้องตั้งใน Config
+
+local _G_WhiteScreen = true 
+if type(getgenv().WhiteScreen) == "boolean" then
+    _G_WhiteScreen = getgenv().WhiteScreen
+end
+
+local WEAPONS = (getgenv().Weapons ~= nil and type(getgenv().Weapons) == "table") and getgenv().Weapons or {"Soul Reaper", "Strongest In History"}
+local SKILLS = (getgenv().Skills ~= nil and type(getgenv().Skills) == "table") and getgenv().Skills or {"X"}
+
+-- 🌟 ตั้งค่า INSTAKILL (ปรับให้เหลือแค่เช็คว่า "เปิด หรือ ปิด" จาก Config ตัวรัน)
+local _G_InstaKill = true
+if type(getgenv().InstaKill) == "boolean" then
+    _G_InstaKill = getgenv().InstaKill
+end
+local _G_InstaKillMinHP = 0
+local _G_InstaKillThreshold = 90 -- ล็อคค่าไว้ที่ 90% ตามที่คุณตั้งไว้
+
+-------------------------------------------------
+-- 💎 ULTRA MINIMAL CAPSULE UI
+-------------------------------------------------
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "XDFlex_Ultimate"
+ScreenGui.ResetOnSpawn = false 
+ScreenGui.DisplayOrder = 9999
+ScreenGui.IgnoreGuiInset = true
+
+pcall(function() ScreenGui.Parent = CoreGui end)
+if not ScreenGui.Parent then ScreenGui.Parent = lp:WaitForChild("PlayerGui") end
+
+local WhiteScreenFrame = Instance.new("Frame")
+WhiteScreenFrame.Size = UDim2.new(1, 0, 1, 0)
+WhiteScreenFrame.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+WhiteScreenFrame.BorderSizePixel = 0
+WhiteScreenFrame.ZIndex = 1 
+WhiteScreenFrame.Visible = _G_WhiteScreen 
+WhiteScreenFrame.Parent = ScreenGui
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 360, 0, 45) 
+MainFrame.Position = UDim2.new(0.5, -180, 0, 30) 
+MainFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 10)
+MainFrame.BackgroundTransparency = 0.2
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.ZIndex = 2 
+MainFrame.Parent = ScreenGui
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(1, 0)
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.FillDirection = Enum.FillDirection.Horizontal
+UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+UIListLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+UIListLayout.Padding = UDim.new(0, 8)
+UIListLayout.Parent = MainFrame
+
+local function CreateButton(text, color)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 105, 0, 32)
+    btn.BackgroundColor3 = color
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 11
+    btn.ZIndex = 3 
+    btn.Parent = MainFrame
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(1, 0)
+    return btn
+end
+
+local FarmBtn = CreateButton(_G_AutoFarm and "⚔️ Farm: ✅" or "⚔️ Farm: ❌", _G_AutoFarm and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(231, 76, 60))
+local WhiteScreenBtn = CreateButton(_G_WhiteScreen and "⚪ Screen: ✅" or "⚫ Screen: ❌", _G_WhiteScreen and Color3.fromRGB(149, 165, 166) or Color3.fromRGB(52, 73, 94))
+local DiscordBtn = CreateButton("👾 Discord", Color3.fromRGB(88, 101, 242))
+
+if _G_WhiteScreen then pcall(function() RunService:Set3dRenderingEnabled(false) end) end
+
+local function MakeDraggable(gui)
+    local dragging, dragInput, dragStart, startPos
+    gui.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true; dragStart = input.Position; startPos = gui.Position
+            input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end)
+        end
+    end)
+    gui.InputChanged:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if input == dragInput and dragging then
+            local delta = input.Position - dragStart
+            gui.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+end
+MakeDraggable(MainFrame)
+
+FarmBtn.MouseButton1Click:Connect(function()
+    _G_AutoFarm = not _G_AutoFarm
+    FarmBtn.BackgroundColor3 = _G_AutoFarm and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(231, 76, 60)
+    FarmBtn.Text = _G_AutoFarm and "⚔️ Farm: ✅" or "⚔️ Farm: ❌"
+end)
+
+WhiteScreenBtn.MouseButton1Click:Connect(function()
+    _G_WhiteScreen = not _G_WhiteScreen
+    WhiteScreenBtn.BackgroundColor3 = _G_WhiteScreen and Color3.fromRGB(149, 165, 166) or Color3.fromRGB(52, 73, 94)
+    WhiteScreenBtn.Text = _G_WhiteScreen and "⚪ Screen: ✅" or "⚫ Screen: ❌"
+    WhiteScreenFrame.Visible = _G_WhiteScreen
+    pcall(function() RunService:Set3dRenderingEnabled(not _G_WhiteScreen) end)
+end)
+
+DiscordBtn.MouseButton1Click:Connect(function()
+    if setclipboard then
+        pcall(function() setclipboard("https://discord.gg/paWWE2nZzf") end)
+        DiscordBtn.Text = "✅ Copied!"
+        DiscordBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+    else
+        DiscordBtn.Text = "❌ Error"
+        DiscordBtn.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
+    end
+    task.delay(1.5, function()
+        DiscordBtn.Text = "👾 Discord"
+        DiscordBtn.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+    end)
+end)
+
+-------------------------------------------------
+-- GAME SETTINGS & FPS BOOST
+-------------------------------------------------
+pcall(function()
+    local settingsToToggle = {"DisableCutscene", "DisableVFX", "MuteSFX", "MuteMusic", "DisableScreenShake", "RemoveTexture", "RemoveShadows"}
+    if SettingsToggle then
+        for _, name in ipairs(settingsToToggle) do
+            SettingsToggle:FireServer(name, true)
+            task.wait(0.1)
+        end
+    end
+end)
+settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+
+-------------------------------------------------
+-- ☢️ ORIGINAL ONE-TIME NUKE SYSTEM
+-------------------------------------------------
+local FarmRoute = {
+    {portal = "Shibuya", pos = CFrame.new(1400.0594, 8.4861, 484.9847)},
+    {portal = "HuecoMundo", pos = CFrame.new(-369.4567, -0.1593, 1092.5155)},
+    {portal = "Shinjuku", pos = CFrame.new(-17.3715, 1.8984, -1842.6716)},
+    {portal = "Shinjuku", pos = CFrame.new(666.2935, 1.8831, -1692.1214)},
+    {portal = "Slime", pos = CFrame.new(-1123.8552, 13.9182, 368.3176)},
+    {portal = "Academy", pos = CFrame.new(1068.3764, 1.7783, 1277.8568)},
+    {portal = "Judgement", pos = CFrame.new(-1270.6287, 1.1774, -1192.4418)},
+    {portal = "Ninja", pos = CFrame.new(-1878.8419, 8.5140, -739.5654)},
+    {portal = "Lawless", pos = CFrame.new(52.5574, 0.5787, 1815.9211)},
+    {portal = "Tower", pos = CFrame.new(-1270.6287, 1.1774, -1192.4418)},
+    {portal = "Shibuya", pos = CFrame.new(1557.5450, 72.7205, -38.0354)},
+    {portal = "Shibuya", pos = CFrame.new(1526.7109, 8.4861, 226.4409)},
+    {portal = "Shibuya", pos = CFrame.new(1852.6188, 8.4861, 345.3439)}
+}
+
+local PlatformFolder = Instance.new("Folder", workspace)
+PlatformFolder.Name = "FarmPlatforms"
+
+-- สร้างพื้นล่องหน
+for _, area in ipairs(FarmRoute) do
+    local platform = Instance.new("Part")
+    platform.Size = Vector3.new(200, 5, 200)
+    platform.CFrame = area.pos * CFrame.new(0, -6, 0)
+    platform.Anchored = true
+    platform.Transparency = 1
+    platform.CanCollide = true
+    platform.Parent = PlatformFolder
+end
+
+-- ล้างแมพและล้าง UI เน็ตหลุด (ทำครั้งเดียวหลังรัน 3 วิ)
+task.spawn(function()
+    task.wait(3)
+    pcall(function()
+        if CoreGui:FindFirstChild("RobloxNetworkPauseNotification") then CoreGui.RobloxNetworkPauseNotification:Destroy() end
+        local robloxGui = CoreGui:FindFirstChild("RobloxGui")
+        if robloxGui then
+            local modules = robloxGui:FindFirstChild("Modules")
+            if modules and modules:FindFirstChild("NetworkPauseNotification") then modules.NetworkPauseNotification:Destroy() end
+            if robloxGui:FindFirstChild("CoreScripts/NetworkPause") then robloxGui["CoreScripts/NetworkPause"]:Destroy() end
+        end
+    end)
+    local t = workspace:FindFirstChildOfClass("Terrain")
+    if t then t:Clear() end
+    for _, v in pairs(workspace:GetChildren()) do
+        if v ~= lp.Character and v ~= PlatformFolder and not v:IsA("Camera") and not v:IsA("Terrain") and not v:FindFirstChildOfClass("Humanoid") and v.Name ~= "NPCs" then
+            pcall(function() v:Destroy() end)
+        end
+    end
+end)
+
+-------------------------------------------------
+-- AUTO SYSTEMS
+-------------------------------------------------
+local function enableBuso()
+    task.wait(1)
+    if HakiRemote then pcall(function() HakiRemote:FireServer("Toggle") end) end
+end
+if lp.Character then enableBuso() end
+lp.CharacterAdded:Connect(enableBuso)
+
+task.spawn(function()
+    while task.wait(30) do
+        if _G_AutoFarm and ObservationRemote then 
+            pcall(function() ObservationRemote:FireServer("Toggle") end) 
+        end
+    end
+end)
+
+-- Auto Equip
+task.spawn(function()
+    local idx = 1
+    while task.wait(0.5) do
+        if _G_AutoFarm and lp.Character and lp:FindFirstChild("Backpack") then
+            local h = lp.Character:FindFirstChildOfClass("Humanoid")
+            if h then
+                local w = lp.Backpack:FindFirstChild(WEAPONS[idx])
+                if w then h:EquipTool(w) end
+                idx = (idx % #WEAPONS) + 1
+            end
+        end
+    end
+end)
+
+-- Auto Skill
+task.spawn(function()
+    while task.wait(0.25) do 
+        if _G_AutoFarm then
+            pcall(function()
+                for _, key in ipairs(SKILLS) do
+                    VirtualInputManager:SendKeyEvent(true, key, false, game)
+                    task.wait()
+                    VirtualInputManager:SendKeyEvent(false, key, false, game)
+                    task.wait(0.05) 
+                end
+            end)
+        end
+    end
+end)
+
+-------------------------------------------------
+-- 🚀 SMART TELEPORT FUNCTION
+-------------------------------------------------
+local function TP(targetCFrame, portalName) 
+    if not lp.Character or not lp.Character:FindFirstChild("HumanoidRootPart") then return end
+    
+    local Root = lp.Character.HumanoidRootPart
+    local distance = (Root.Position - targetCFrame.Position).Magnitude
+    
+    if distance > 30 then
+        if PortalRemote then 
+            pcall(function() PortalRemote:FireServer(portalName) end) 
+        end
+        task.wait(0.35) 
+        for i = 1, 3 do
+            Root.CFrame = targetCFrame
+            task.wait(0.001)
+        end 
+    else 
+        task.wait(0.001)
+        Root.CFrame = targetCFrame
+    end
+end
+
+-------------------------------------------------
+-- 💀 AOE INSTAKILL FUNCTION (อัปเกรดระบบค้นหา + แจ้งเตือน)
+-------------------------------------------------
+local function AreaInstaKill(centerPos, radius)
+    if not _G_InstaKill then return end
+    
+    local mobsFound = {}
+    
+    -- 1. หาจากโฟลเดอร์ NPCs ก่อน (ถ้ามี)
+    local npcsFolder = workspace:FindFirstChild("NPCs")
+    if npcsFolder then
+        for _, mob in pairs(npcsFolder:GetChildren()) do
+            table.insert(mobsFound, mob)
+        end
+    end
+    
+    -- 2. หาจาก Workspace ตรงๆ ด้วย (เผื่อมอนไม่ได้อยู่ในโฟลเดอร์)
+    for _, mob in pairs(workspace:GetChildren()) do
+        if mob:IsA("Model") and mob ~= lp.Character and mob.Name ~= "FarmPlatforms" then
+            table.insert(mobsFound, mob)
+        end
+    end
+
+    local killCount = 0
+
+    -- สแกนและสั่งตาย
+    for _, mob in pairs(mobsFound) do
+        local npcHum = mob:FindFirstChild("Humanoid")
+        local hrp = mob:FindFirstChild("HumanoidRootPart")
+        
+        if npcHum and hrp and npcHum.Health > 0 then
+            local dist = (hrp.Position - centerPos.Position).Magnitude
+            
+            -- ถ้ามอนสเตอร์อยู่ในรัศมี
+            if dist <= radius then
+                local hpPercent = (npcHum.Health / npcHum.MaxHealth) * 100
+                
+                if npcHum.MaxHealth >= _G_InstaKillMinHP and hpPercent <= _G_InstaKillThreshold then
+                    pcall(function()
+                        npcHum.Health = 0 -- 💀 บังคับตาย
+                        killCount = killCount + 1
+                        
+                        if not mob:FindFirstChild("IK_Active") then
+                            local tag = Instance.new("Folder")
+                            tag.Name = "IK_Active"
+                            tag:SetAttribute("TriggerTime", tick())
+                            tag.Parent = mob
+                        end
+                    end)
+                end
+            end
+        end
+    end
+    
+    -- แจ้งเตือนใน Console (กด F9 ดูได้)
+    if killCount > 0 then
+        print("[InstaKill] " .. killCount .. " ตัว")
+    end
+end
+
+-------------------------------------------------
+-- MAIN FARM LOOP (UPDATED)
+-------------------------------------------------
+task.spawn(function()
+    while true do
+        if _G_AutoFarm then
+            for _, area in ipairs(FarmRoute) do
+                if not _G_AutoFarm then break end
+                
+                -- 1. วาร์ปไปยืนจุดศูนย์กลางของมอนสเตอร์
+                TP(area.pos, area.portal)
+                
+                -- 2. รันเรดาร์ InstaKill ฆ่าทุกตัวในรัศมี 50 สตั๊ดรอบตัว
+                AreaInstaKill(area.pos, 50) 
+                
+                -- 3. เวลายืนฟาร์ม (0.8 วิ)
+                task.wait(0.8)
+            end
+        else 
+            task.wait(1) 
+        end
+    end
+end)
+
+-------------------------------------------------
+-- 🌟 FIXED: เคลียร์ RAM ป้องกันค้าง (แก้ Error สีแดง)
+-------------------------------------------------
+local LogService = game:GetService("LogService")
+local ScriptContext = game:GetService("ScriptContext")
+pcall(function()
+    LogService.MessageOut:Connect(function() end)
+    ScriptContext.Error:Connect(function() end)
+end)
+
+task.spawn(function() 
+    while task.wait(60) do 
+        pcall(function()
+            -- ใช้การเก็บขยะแบบมาตรฐานแทนแบบ step เพื่อป้องกัน Error ใน Luau ใหม่
+            collectgarbage("collect")
+        end)
+    end 
+end)
