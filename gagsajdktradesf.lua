@@ -10,7 +10,7 @@ local Networking = require(SharedModules:WaitForChild("Networking"))
 
 -- ── Config ──
 local LIMIT       = 100000
-local MAX_SLOTS_PER_MAIL = 15
+local MAX_SLOTS_PER_MAIL = 20
 local SEND_DELAY  = 1.5
 local MAX_RETRIES = 5
 local WAIT_BUFFER = 0.25
@@ -196,7 +196,7 @@ end
 -- ── Custom UI SETUP ──
 
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "xdflexautotarde_v3"
+ScreenGui.Name = "xdflexautotarde_v7"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
@@ -207,6 +207,7 @@ ScreenGui.Parent = targetGui
 -- Variables & Theme
 local selectedItemCleanName = ""
 local currentItemData = {}
+local currentQueue = {}
 local isUiOpen = true
 local currentCategoryFilter = "All"
 
@@ -217,6 +218,7 @@ local Colors = {
     Border = Color3.fromRGB(45, 45, 55),         
     Accent = Color3.fromRGB(41, 100, 230),       
     AccentHover = Color3.fromRGB(55, 120, 255),
+    AddBtn = Color3.fromRGB(50, 180, 100),
     TextTitle = Color3.fromRGB(255, 255, 255),
     TextPrimary = Color3.fromRGB(230, 230, 230),
     TextSecondary = Color3.fromRGB(150, 150, 160),
@@ -259,7 +261,7 @@ local function makeDraggable(guiObject, dragHandle)
 end
 
 -- ====================
--- TOAST NOTIFICATION SYSTEM
+-- TOAST NOTIFICATION SYSTEM (Safe ASCII)
 -- ====================
 local ToastContainer = create("Frame", {
     Size = UDim2.new(0, 250, 0, 400), Position = UDim2.new(1, -20, 1, -20), AnchorPoint = Vector2.new(1, 1), BackgroundTransparency = 1, ZIndex = 100
@@ -273,13 +275,13 @@ local function notifyToast(text, state)
     local stroke = create("UIStroke", {Color = Colors.Border, Thickness = 1, Transparency = 1}, toast)
     create("UICorner", {CornerRadius = UDim.new(0, 6)}, toast)
     
-    local iconStr = "ℹ"
+    local iconStr = "i"
     local iconColor = Colors.Accent
-    if state == "error" then iconStr = "✕"; iconColor = Colors.Danger; stroke.Color = Colors.Danger
-    elseif state == "success" then iconStr = "✓"; iconColor = Colors.Success; stroke.Color = Colors.Success
-    elseif state == "warning" then iconStr = "⚠"; iconColor = Colors.Warning; stroke.Color = Colors.Warning end
+    if state == "error" then iconStr = "X"; iconColor = Colors.Danger; stroke.Color = Colors.Danger
+    elseif state == "success" then iconStr = "OK"; iconColor = Colors.Success; stroke.Color = Colors.Success
+    elseif state == "warning" then iconStr = "!"; iconColor = Colors.Warning; stroke.Color = Colors.Warning end
     
-    local icon = create("TextLabel", {Size = UDim2.new(0, 30, 1, 0), Position = UDim2.new(0, 10, 0, 0), BackgroundTransparency = 1, TextTransparency = 1, Text = iconStr, TextColor3 = iconColor, Font = Enum.Font.GothamBold, TextSize = 16}, toast)
+    local icon = create("TextLabel", {Size = UDim2.new(0, 35, 1, 0), Position = UDim2.new(0, 5, 0, 0), BackgroundTransparency = 1, TextTransparency = 1, Text = iconStr, TextColor3 = iconColor, Font = Enum.Font.GothamBold, TextSize = 14}, toast)
     local msg = create("TextLabel", {Size = UDim2.new(1, -50, 1, 0), Position = UDim2.new(0, 40, 0, 0), BackgroundTransparency = 1, TextTransparency = 1, Text = text, TextColor3 = Colors.TextTitle, Font = Enum.Font.GothamMedium, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true}, toast)
 
     tween(toast, {BackgroundTransparency = 0}, 0.3)
@@ -304,16 +306,16 @@ create("UICorner", {CornerRadius = UDim.new(0, 8)}, FloatingBtn)
 create("UIStroke", {Color = Colors.Border, Thickness = 1}, FloatingBtn)
 makeDraggable(FloatingBtn)
 
-local MainFrame = create("CanvasGroup", {Size = UDim2.new(0, 360, 0, 480), Position = UDim2.new(0.5, -180, 0.5, -240), BackgroundColor3 = Colors.Background, BorderSizePixel = 0, GroupTransparency = 0}, ScreenGui)
+local MainFrame = create("CanvasGroup", {Size = UDim2.new(0, 360, 0, 530), Position = UDim2.new(0.5, -180, 0.5, -265), BackgroundColor3 = Colors.Background, BorderSizePixel = 0, GroupTransparency = 0}, ScreenGui)
 create("UICorner", {CornerRadius = UDim.new(0, 10)}, MainFrame)
 create("UIStroke", {Color = Colors.Border, Thickness = 1}, MainFrame)
 
 local Header = create("Frame", {Size = UDim2.new(1, 0, 0, 40), BackgroundTransparency = 1}, MainFrame)
-create("TextLabel", {Size = UDim2.new(1, -50, 1, 0), Position = UDim2.new(0, 15, 0, 0), Text = "XDFLEX Mailbox Sender V3", Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = Colors.TextTitle, TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 1}, Header)
+create("TextLabel", {Size = UDim2.new(1, -50, 1, 0), Position = UDim2.new(0, 15, 0, 0), Text = "XDFLEX Mail Sender", Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = Colors.TextTitle, TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 1}, Header)
 makeDraggable(MainFrame, Header)
 local CloseBtn = create("TextButton", {Size = UDim2.new(0, 30, 0, 30), Position = UDim2.new(1, -35, 0, 5), BackgroundTransparency = 1, Text = "X", TextColor3 = Colors.TextSecondary, Font = Enum.Font.GothamBold, TextSize = 14}, Header)
 
--- Profile Section
+-- [1] Profile Section
 local ProfileCard = create("Frame", {Size = UDim2.new(1, -30, 0, 75), Position = UDim2.new(0, 15, 0, 45), BackgroundColor3 = Colors.CardBg}, MainFrame)
 create("UICorner", {CornerRadius = UDim.new(0, 8)}, ProfileCard)
 create("UIStroke", {Color = Colors.Border, Thickness = 1}, ProfileCard)
@@ -321,17 +323,20 @@ local AvatarFrame = create("Frame", {Size = UDim2.new(0, 50, 0, 50), Position = 
 create("UICorner", {CornerRadius = UDim.new(1, 0)}, AvatarFrame)
 local AvatarImage = create("ImageLabel", {Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Image = "rbxasset://textures/ui/GuiImagePlaceholder.png"}, AvatarFrame)
 create("UICorner", {CornerRadius = UDim.new(1, 0)}, AvatarImage)
-local UsernameInput = create("TextBox", {Size = UDim2.new(1, -84, 0, 30), Position = UDim2.new(0, 74, 0, 12), BackgroundColor3 = Colors.InputBg, TextColor3 = Colors.TextPrimary, Font = Enum.Font.GothamMedium, TextSize = 13, PlaceholderText = "Recipient Username", Text = "", ClearTextOnFocus = false}, ProfileCard)
+local UsernameInput = create("TextBox", {Size = UDim2.new(1, -84, 0, 30), Position = UDim2.new(0, 74, 0, 12), BackgroundColor3 = Colors.InputBg, TextColor3 = Colors.TextPrimary, Font = Enum.Font.GothamMedium, TextSize = 13, PlaceholderText = "Recipient Username", Text = "", ClearTextOnFocus = true}, ProfileCard)
 create("UICorner", {CornerRadius = UDim.new(0, 6)}, UsernameInput)
 create("UIPadding", {PaddingLeft = UDim.new(0, 8)}, UsernameInput)
 create("UIStroke", {Color = Colors.Border, Thickness = 1}, UsernameInput)
 local DisplayNameLabel = create("TextLabel", {Size = UDim2.new(1, -84, 0, 20), Position = UDim2.new(0, 74, 0, 44), Text = "Awaiting user...", Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = Colors.TextSecondary, TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 1}, ProfileCard)
 
--- Item Selection Section
-local ItemCard = create("Frame", {Size = UDim2.new(1, -30, 0, 115), Position = UDim2.new(0, 15, 0, 130), BackgroundColor3 = Colors.CardBg}, MainFrame)
+-- [2] Item Selection & Add to Queue
+local ItemCard = create("Frame", {Size = UDim2.new(1, -30, 0, 115), Position = UDim2.new(0, 15, 0, 130), BackgroundColor3 = Colors.CardBg, ZIndex = 1}, MainFrame)
 create("UICorner", {CornerRadius = UDim.new(0, 8)}, ItemCard)
 create("UIStroke", {Color = Colors.Border, Thickness = 1}, ItemCard)
-create("TextLabel", {Size = UDim2.new(1, -24, 0, 20), Position = UDim2.new(0, 12, 0, 10), Text = "Select Item", Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = Colors.TextPrimary, TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 1}, ItemCard)
+create("TextLabel", {Size = UDim2.new(1, -60, 0, 20), Position = UDim2.new(0, 12, 0, 10), Text = "Select Item & Add to Queue", Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = Colors.TextPrimary, TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 1}, ItemCard)
+
+local RefreshBtn = create("TextButton", {Size = UDim2.new(0, 45, 0, 30), Position = UDim2.new(1, -57, 0, 5), BackgroundColor3 = Colors.InputBg, Text = "Sync", TextColor3 = Colors.TextPrimary, Font = Enum.Font.GothamBold, TextSize = 12, AutoButtonColor = false}, ItemCard)
+create("UICorner", {CornerRadius = UDim.new(0, 6)}, RefreshBtn)
 
 -- TABS
 local TabContainer = create("Frame", {Size = UDim2.new(1, -24, 0, 25), Position = UDim2.new(0, 12, 0, 35), BackgroundTransparency = 1}, ItemCard)
@@ -341,43 +346,46 @@ local function createTab(name)
     local btn = create("TextButton", {Size = UDim2.new(0, 65, 1, 0), BackgroundColor3 = (name == "All") and Colors.Accent or Colors.InputBg, Text = name, TextColor3 = (name == "All") and Colors.TextTitle or Colors.TextSecondary, Font = Enum.Font.GothamMedium, TextSize = 12, AutoButtonColor = false}, TabContainer)
     create("UICorner", {CornerRadius = UDim.new(0, 6)}, btn)
     create("UIStroke", {Color = Colors.Border, Thickness = 1}, btn)
-    tabs[name] = btn
-    return btn
+    tabs[name] = btn; return btn
 end
-local tabAll = createTab("All")
-local tabSeeds = createTab("Seeds")
-local tabFruits = createTab("Fruits")
-local tabPets = createTab("Pets")
+local tabAll = createTab("All"); local tabSeeds = createTab("Seeds"); local tabFruits = createTab("Fruits"); local tabPets = createTab("Pets")
 
-local DropdownBtn = create("TextButton", {Size = UDim2.new(1, -94, 0, 35), Position = UDim2.new(0, 12, 0, 68), BackgroundColor3 = Colors.InputBg, Text = "Select an Item...", TextColor3 = Colors.TextSecondary, Font = Enum.Font.Gotham, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, AutoButtonColor = false}, ItemCard)
+local DropdownBtn = create("TextButton", {Size = UDim2.new(1, -165, 0, 35), Position = UDim2.new(0, 12, 0, 68), BackgroundColor3 = Colors.InputBg, Text = "Select Item...", TextColor3 = Colors.TextSecondary, Font = Enum.Font.Gotham, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, AutoButtonColor = false}, ItemCard)
 create("UICorner", {CornerRadius = UDim.new(0, 6)}, DropdownBtn)
-create("UIPadding", {PaddingLeft = UDim.new(0, 10)}, DropdownBtn)
+create("UIPadding", {PaddingLeft = UDim.new(0, 10), PaddingRight = UDim.new(0, 5)}, DropdownBtn)
 create("UIStroke", {Color = Colors.Border, Thickness = 1}, DropdownBtn)
 
-local RefreshBtn = create("TextButton", {Size = UDim2.new(0, 65, 0, 35), Position = UDim2.new(1, -77, 0, 68), BackgroundColor3 = Colors.InputBg, Text = "Refresh", TextColor3 = Colors.TextPrimary, Font = Enum.Font.GothamMedium, TextSize = 12, AutoButtonColor = false}, ItemCard)
-create("UICorner", {CornerRadius = UDim.new(0, 6)}, RefreshBtn)
-create("UIStroke", {Color = Colors.Border, Thickness = 1}, RefreshBtn)
-
--- Amount Section
-local AmountCard = create("Frame", {Size = UDim2.new(1, -30, 0, 85), Position = UDim2.new(0, 15, 0, 255), BackgroundColor3 = Colors.CardBg}, MainFrame)
-create("UICorner", {CornerRadius = UDim.new(0, 8)}, AmountCard)
-create("UIStroke", {Color = Colors.Border, Thickness = 1}, AmountCard)
-create("TextLabel", {Size = UDim2.new(1, -24, 0, 20), Position = UDim2.new(0, 12, 0, 10), Text = "Amount", Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = Colors.TextPrimary, TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 1}, AmountCard)
-local AmountInput = create("TextBox", {Size = UDim2.new(1, -24, 0, 35), Position = UDim2.new(0, 12, 0, 38), BackgroundColor3 = Colors.InputBg, TextColor3 = Colors.TextPrimary, Font = Enum.Font.GothamMedium, TextSize = 13, PlaceholderText = "Max", Text = "1", ClearTextOnFocus = false}, AmountCard)
+local AmountInput = create("TextBox", {Size = UDim2.new(0, 65, 0, 35), Position = UDim2.new(1, -145, 0, 68), BackgroundColor3 = Colors.InputBg, TextColor3 = Colors.TextPrimary, Font = Enum.Font.GothamMedium, TextSize = 13, PlaceholderText = "Qty", Text = "1", ClearTextOnFocus = true}, ItemCard)
 create("UICorner", {CornerRadius = UDim.new(0, 6)}, AmountInput)
-create("UIPadding", {PaddingLeft = UDim.new(0, 10)}, AmountInput)
 create("UIStroke", {Color = Colors.Border, Thickness = 1}, AmountInput)
 
--- Action Section
-local StatusLabel = create("TextLabel", {Size = UDim2.new(1, -30, 0, 20), Position = UDim2.new(0, 15, 0, 350), Text = "System Ready.", Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = Colors.TextSecondary, BackgroundTransparency = 1}, MainFrame)
-local SendBtn = create("TextButton", {Size = UDim2.new(1, -30, 0, 45), Position = UDim2.new(0, 15, 0, 380), BackgroundColor3 = Colors.Accent, Text = "Send Mail", TextColor3 = Colors.TextTitle, Font = Enum.Font.GothamBold, TextSize = 14, AutoButtonColor = false}, MainFrame)
+local AddBtn = create("TextButton", {Size = UDim2.new(0, 65, 0, 35), Position = UDim2.new(1, -75, 0, 68), BackgroundColor3 = Colors.AddBtn, Text = "Add", TextColor3 = Colors.TextTitle, Font = Enum.Font.GothamBold, TextSize = 13, AutoButtonColor = false}, ItemCard)
+create("UICorner", {CornerRadius = UDim.new(0, 6)}, AddBtn)
+
+-- [3] Queue Section
+local QueueCard = create("Frame", {Size = UDim2.new(1, -30, 0, 140), Position = UDim2.new(0, 15, 0, 255), BackgroundColor3 = Colors.CardBg, ZIndex = 1}, MainFrame)
+create("UICorner", {CornerRadius = UDim.new(0, 8)}, QueueCard)
+create("UIStroke", {Color = Colors.Border, Thickness = 1}, QueueCard)
+
+local QueueTitle = create("TextLabel", {Size = UDim2.new(1, -24, 0, 20), Position = UDim2.new(0, 12, 0, 10), Text = "Mail Queue (0)", Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = Colors.TextPrimary, TextXAlignment = Enum.TextXAlignment.Left, BackgroundTransparency = 1}, QueueCard)
+local ClearQueueBtn = create("TextButton", {Size = UDim2.new(0, 50, 0, 20), Position = UDim2.new(1, -62, 0, 10), BackgroundTransparency = 1, Text = "Clear", TextColor3 = Colors.Danger, Font = Enum.Font.Gotham, TextSize = 12}, QueueCard)
+
+local QueueScroll = create("ScrollingFrame", {Size = UDim2.new(1, -16, 0, 95), Position = UDim2.new(0, 8, 0, 35), BackgroundTransparency = 1, ScrollBarThickness = 3, ScrollBarImageColor3 = Colors.Border, BorderSizePixel = 0, ZIndex = 2}, QueueCard)
+local QueueLayout = create("UIListLayout", {SortOrder = Enum.SortOrder.LayoutOrder, Padding = UDim.new(0, 2)}, QueueScroll)
+
+-- Forward Declaration of populateDropdown
+local populateDropdown
+
+-- [4] Action Section
+local StatusLabel = create("TextLabel", {Size = UDim2.new(1, -30, 0, 20), Position = UDim2.new(0, 15, 0, 405), Text = "System Ready.", Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = Colors.TextSecondary, BackgroundTransparency = 1}, MainFrame)
+local SendBtn = create("TextButton", {Size = UDim2.new(1, -30, 0, 45), Position = UDim2.new(0, 15, 0, 435), BackgroundColor3 = Colors.Accent, Text = "Send All Queue", TextColor3 = Colors.TextTitle, Font = Enum.Font.GothamBold, TextSize = 14, AutoButtonColor = false}, MainFrame)
 create("UICorner", {CornerRadius = UDim.new(0, 8)}, SendBtn)
 
--- Dropdown List
-local DropdownScroll = create("CanvasGroup", {Size = UDim2.new(1, -54, 0, 0), Position = UDim2.new(0, 27, 0, 235), BackgroundColor3 = Colors.InputBg, BorderSizePixel = 0, GroupTransparency = 1, ZIndex = 10}, MainFrame)
+-- Dropdown List (ZIndex 50)
+local DropdownScroll = create("CanvasGroup", {Size = UDim2.new(1, -185, 0, 0), Position = UDim2.new(0, 27, 0, 235), BackgroundColor3 = Colors.InputBg, BorderSizePixel = 0, GroupTransparency = 1, ZIndex = 50}, MainFrame)
 create("UICorner", {CornerRadius = UDim.new(0, 6)}, DropdownScroll)
 create("UIStroke", {Color = Colors.Border, Thickness = 1}, DropdownScroll)
-local DropdownList = create("ScrollingFrame", {Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, ScrollBarThickness = 3, ScrollBarImageColor3 = Colors.Border, BorderSizePixel = 0}, DropdownScroll)
+local DropdownList = create("ScrollingFrame", {Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, ScrollBarThickness = 3, ScrollBarImageColor3 = Colors.Border, BorderSizePixel = 0, ZIndex = 51}, DropdownScroll)
 local UIListLayout = create("UIListLayout", {SortOrder = Enum.SortOrder.LayoutOrder}, DropdownList)
 
 -- ── Interactions & Core Logic ──
@@ -389,14 +397,15 @@ end
 applyHover(FloatingBtn, Colors.CardBg, Colors.Border)
 applyHover(RefreshBtn, Colors.InputBg, Colors.CardBg)
 applyHover(DropdownBtn, Colors.InputBg, Colors.CardBg)
+applyHover(AddBtn, Colors.AddBtn, Color3.fromRGB(60, 200, 110))
 applyHover(SendBtn, Colors.Accent, Colors.AccentHover)
 
 local function toggleUI(forceState)
     if forceState ~= nil then isUiOpen = forceState else isUiOpen = not isUiOpen end
     if isUiOpen then
-        MainFrame.Visible = true; tween(MainFrame, {GroupTransparency = 0, Size = UDim2.new(0, 360, 0, 450)}, 0.3, Enum.EasingStyle.Back)
+        MainFrame.Visible = true; tween(MainFrame, {GroupTransparency = 0, Size = UDim2.new(0, 360, 0, 500)}, 0.3, Enum.EasingStyle.Back)
     else
-        local t = tween(MainFrame, {GroupTransparency = 1, Size = UDim2.new(0, 340, 0, 430)}, 0.2)
+        local t = tween(MainFrame, {GroupTransparency = 1, Size = UDim2.new(0, 340, 0, 480)}, 0.2)
         t.Completed:Connect(function() if not isUiOpen then MainFrame.Visible = false end end)
     end
 end
@@ -421,27 +430,62 @@ UsernameInput.FocusLost:Connect(function()
     end)
 end)
 
+local function renderQueue()
+    for _, child in ipairs(QueueScroll:GetChildren()) do
+        if not child:IsA("UIListLayout") then child:Destroy() end
+    end
+    
+    local count = 0
+    local totalItemsInQueue = 0
+    
+    for name, data in pairs(currentQueue) do
+        count = count + 1
+        totalItemsInQueue = totalItemsInQueue + data.amount
+        
+        local itemFrame = create("Frame", {Size = UDim2.new(1, -10, 0, 25), Position = UDim2.new(0, 5, 0, 0), BackgroundColor3 = Colors.InputBg, BorderSizePixel = 0, ZIndex = 3}, QueueScroll)
+        create("UICorner", {CornerRadius = UDim.new(0, 4)}, itemFrame)
+        create("TextLabel", {Size = UDim2.new(1, -40, 1, 0), Position = UDim2.new(0, 10, 0, 0), BackgroundTransparency = 1, Text = string.format("%s (x%d)", name, data.amount), TextColor3 = Colors.TextPrimary, Font = Enum.Font.Gotham, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 4}, itemFrame)
+        
+        local delBtn = create("TextButton", {Size = UDim2.new(0, 20, 0, 20), Position = UDim2.new(1, -25, 0.5, -10), BackgroundColor3 = Colors.CardBg, Text = "X", TextColor3 = Colors.Danger, Font = Enum.Font.GothamBold, TextSize = 12, ZIndex = 5}, itemFrame)
+        create("UICorner", {CornerRadius = UDim.new(0, 4)}, delBtn)
+        
+        delBtn.MouseButton1Click:Connect(function()
+            currentQueue[name] = nil
+            renderQueue()
+            populateDropdown() -- อัปเดต Dropdown ให้ของกลับมาโชว์
+        end)
+    end
+    
+    QueueTitle.Text = "Mail Queue (" .. count .. " Slots)"
+    QueueScroll.CanvasSize = UDim2.new(0, 0, 0, QueueLayout.AbsoluteContentSize.Y)
+    
+    if totalItemsInQueue > 0 then
+        SendBtn.Text = "Send Queue (" .. totalItemsInQueue .. " Items)"
+    else
+        SendBtn.Text = "Send All Queue"
+    end
+end
+
+ClearQueueBtn.MouseButton1Click:Connect(function()
+    currentQueue = {}; renderQueue(); populateDropdown(); notifyToast("Queue Cleared", "warning")
+end)
+
 local isDropdownOpen = false
 local function toggleDropdown(force)
     if force ~= nil then isDropdownOpen = force else isDropdownOpen = not isDropdownOpen end
     if isDropdownOpen then
         DropdownScroll.Visible = true
-        -- Dynamic Size Calculation for smoother UX
         local targetHeight = math.min(160, math.max(40, UIListLayout.AbsoluteContentSize.Y + 10))
-        tween(DropdownScroll, {GroupTransparency = 0, Size = UDim2.new(1, -54, 0, targetHeight)}, 0.25, Enum.EasingStyle.Back)
+        tween(DropdownScroll, {GroupTransparency = 0, Size = UDim2.new(1, -185, 0, targetHeight)}, 0.25, Enum.EasingStyle.Back)
     else
-        local t = tween(DropdownScroll, {GroupTransparency = 1, Size = UDim2.new(1, -54, 0, 0)}, 0.2)
+        local t = tween(DropdownScroll, {GroupTransparency = 1, Size = UDim2.new(1, -185, 0, 0)}, 0.2)
         t.Completed:Connect(function() if not isDropdownOpen then DropdownScroll.Visible = false end end)
     end
 end
 
--- FIX: ล้างเฉพาะข้อมูลเก่า ป้องกันการซ้อนกันของ Label
-local function populateDropdown()
-    -- ล้างของเก่าทั้งหมดที่ไม่ใช่ Layout
-    for _, child in ipairs(DropdownList:GetChildren()) do 
-        if not child:IsA("UIListLayout") then child:Destroy() end 
-    end
-    -- Reset Scroll position
+-- [FIXED] ลดจำนวนที่มีตามคิว และซ่อนถ้ายัดลงคิวหมดแล้ว
+populateDropdown = function()
+    for _, child in ipairs(DropdownList:GetChildren()) do if not child:IsA("UIListLayout") then child:Destroy() end end
     DropdownList.CanvasPosition = Vector2.new(0, 0)
     
     local options, itemData = getBackpackItems()
@@ -462,54 +506,45 @@ local function populateDropdown()
             end
         end
 
-        if match then
+        local inQueue = currentQueue[rawOpt] and currentQueue[rawOpt].amount or 0
+        local available = data and (data.count - inQueue) or 0
+
+        if match and available > 0 then
             count = count + 1
-            local btn = create("TextButton", {Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, Text = "  " .. opt, TextColor3 = Colors.TextPrimary, Font = Enum.Font.Gotham, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = count}, DropdownList)
+            local displayOpt = rawOpt .. " (x" .. available .. ")"
+            
+            local btn = create("TextButton", {Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, Text = "  " .. displayOpt, TextColor3 = Colors.TextPrimary, Font = Enum.Font.Gotham, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = count, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 52}, DropdownList)
             btn.MouseEnter:Connect(function() tween(btn, {BackgroundTransparency = 0.8}, 0.1) end)
             btn.MouseLeave:Connect(function() tween(btn, {BackgroundTransparency = 1}, 0.1) end)
             btn.MouseButton1Click:Connect(function()
-                DropdownBtn.Text = opt; DropdownBtn.TextColor3 = Colors.TextPrimary
+                DropdownBtn.Text = " " .. displayOpt; DropdownBtn.TextColor3 = Colors.TextPrimary
                 selectedItemCleanName = rawOpt
                 toggleDropdown(false)
             end)
         end
     end
-    
-    if count == 0 then
-        create("TextLabel", {Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, Text = "  No items in this category", TextColor3 = Colors.TextSecondary, Font = Enum.Font.Gotham, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = 1}, DropdownList)
-    end
+    if count == 0 then create("TextLabel", {Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, Text = "  No items available", TextColor3 = Colors.TextSecondary, Font = Enum.Font.Gotham, TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, LayoutOrder = 1, ZIndex = 52}, DropdownList) end
     DropdownList.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y)
     
-    -- Auto adjust if dropdown is currently open
-    if isDropdownOpen then
-        local targetHeight = math.min(160, math.max(40, UIListLayout.AbsoluteContentSize.Y + 10))
-        tween(DropdownScroll, {Size = UDim2.new(1, -54, 0, targetHeight)}, 0.2)
-    end
+    if isDropdownOpen then tween(DropdownScroll, {Size = UDim2.new(1, -185, 0, math.min(160, math.max(40, UIListLayout.AbsoluteContentSize.Y + 10)))}, 0.2) end
 end
 
--- Tab Click Events
 for name, btn in pairs(tabs) do
     btn.MouseButton1Click:Connect(function()
-        if currentCategoryFilter == name then return end -- ป้องกันกดรัวที่ Tab เดิม
+        if currentCategoryFilter == name then return end
         currentCategoryFilter = name
         for tName, tBtn in pairs(tabs) do
-            if tName == name then
-                tween(tBtn, {BackgroundColor3 = Colors.Accent}, 0.2); tBtn.TextColor3 = Colors.TextTitle
-            else
-                tween(tBtn, {BackgroundColor3 = Colors.InputBg}, 0.2); tBtn.TextColor3 = Colors.TextSecondary
-            end
+            if tName == name then tween(tBtn, {BackgroundColor3 = Colors.Accent}, 0.2); tBtn.TextColor3 = Colors.TextTitle
+            else tween(tBtn, {BackgroundColor3 = Colors.InputBg}, 0.2); tBtn.TextColor3 = Colors.TextSecondary end
         end
-        -- Auto-Clear Selection เมื่อเปลี่ยนหมวดหมู่
-        DropdownBtn.Text = "Select an Item..."
-        DropdownBtn.TextColor3 = Colors.TextSecondary
-        selectedItemCleanName = ""
+        DropdownBtn.Text = "Select Item..."; DropdownBtn.TextColor3 = Colors.TextSecondary; selectedItemCleanName = ""
         populateDropdown()
     end)
 end
 
 DropdownBtn.MouseButton1Click:Connect(function() toggleDropdown() end)
 RefreshBtn.MouseButton1Click:Connect(function()
-    populateDropdown(); DropdownBtn.Text = "Select an Item..."; DropdownBtn.TextColor3 = Colors.TextSecondary; selectedItemCleanName = ""
+    populateDropdown(); DropdownBtn.Text = "Select Item..."; DropdownBtn.TextColor3 = Colors.TextSecondary; selectedItemCleanName = ""
     notifyToast("Inventory Refreshed", "success")
 end)
 
@@ -519,52 +554,103 @@ AmountInput.FocusLost:Connect(function()
     if not num or num < 1 then AmountInput.Text = "1" end
 end)
 
+-- Add to Queue Logic
+AddBtn.MouseButton1Click:Connect(function()
+    local amt = tonumber(AmountInput.Text) or 1
+    if selectedItemCleanName == "" then return notifyToast("Select an item first!", "error") end
+    
+    local data = currentItemData[selectedItemCleanName]
+    if not data then return notifyToast("Item not found in inventory!", "error") end
+
+    local currentInQueue = currentQueue[selectedItemCleanName] and currentQueue[selectedItemCleanName].amount or 0
+    local availableToAdd = data.count - currentInQueue
+
+    if availableToAdd <= 0 then
+        return notifyToast("All " .. selectedItemCleanName .. " are already in queue!", "warning")
+    end
+
+    if amt > availableToAdd then
+        amt = availableToAdd
+        AmountInput.Text = tostring(amt)
+        notifyToast("Auto-adjusted to max (" .. amt .. ")", "warning")
+    else
+        notifyToast("Added to Queue", "success")
+    end
+
+    if not currentQueue[selectedItemCleanName] then
+        currentQueue[selectedItemCleanName] = {amount = amt, rawName = data.rawName, category = data.category, isUUID = data.isUUID}
+    else
+        currentQueue[selectedItemCleanName].amount = currentQueue[selectedItemCleanName].amount + amt
+    end
+
+    -- เคลียร์ปุ่มเลือกถ้าของชิ้นนั้นลงคิวหมดแล้ว
+    if availableToAdd - amt <= 0 then
+        DropdownBtn.Text = "Select Item..."
+        DropdownBtn.TextColor3 = Colors.TextSecondary
+        selectedItemCleanName = ""
+    end
+
+    renderQueue()
+    populateDropdown() -- อัปเดตเพื่อหักลบยอดของในลิสต์ Dropdown
+end)
+
+-- Send All Queue Logic
 local isSending = false
 SendBtn.MouseButton1Click:Connect(function()
-    if isSending then notifyToast("Currently sending...", "warning"); return end
+    if isSending then return notifyToast("Currently sending...", "warning") end
     
     local target = UsernameInput.Text
-    local amount = tonumber(AmountInput.Text) or 1
+    if target == "" then return notifyToast("Please enter a username", "error") end
     
-    if target == "" then notifyToast("Please enter a username", "error"); return end
-    if selectedItemCleanName == "" then notifyToast("Please select an item", "error"); return end
+    local isEmpty = true
+    for k, v in pairs(currentQueue) do isEmpty = false; break end
+    if isEmpty then return notifyToast("Your queue is empty!", "error") end
 
-    local data = currentItemData[selectedItemCleanName]
-    if not data or data.count == 0 then notifyToast("Item not found", "error"); return end
-
-    local finalAmount = math.min(amount, data.count)
+    local _, freshData = getBackpackItems()
     local resolvedToPass = {}
-       
-    if data.isUUID then
-        for i = 1, finalAmount do table.insert(resolvedToPass, { Category = data.category, ItemKey = data.uuids[i], Count = 1, DisplayName = selectedItemCleanName }) end
-    else
-        local cat, key = resolveItem(data.rawName)
-        table.insert(resolvedToPass, { Category = cat, ItemKey = key, Count = finalAmount, DisplayName = selectedItemCleanName })
+
+    for dName, qData in pairs(currentQueue) do
+        local fData = freshData[dName]
+        
+        if not fData or fData.count == 0 then
+            return notifyToast("Missing item: " .. dName .. " (Inventory changed)", "error")
+        end
+
+        local finalAmountToSend = math.min(qData.amount, fData.count)
+
+        if qData.isUUID then
+            for i = 1, finalAmountToSend do
+                table.insert(resolvedToPass, { Category = qData.category, ItemKey = fData.uuids[i], Count = 1, DisplayName = dName })
+            end
+        else
+            local cat, key = resolveItem(qData.rawName)
+            table.insert(resolvedToPass, { Category = cat, ItemKey = key, Count = finalAmountToSend, DisplayName = dName })
+        end
     end
 
     isSending = true
-    SendBtn.Text = "Sending..."
+    SendBtn.Text = "Sending Queue..."
     tween(SendBtn, {BackgroundColor3 = Colors.Border}, 0.2)
-    StatusLabel.Text = "Sending " .. finalAmount .. "x " .. selectedItemCleanName .. "..."
+    StatusLabel.Text = "Processing Mail Queue..."
 
     task.spawn(function()
         local success, msg = Send(target, resolvedToPass, notifyToast)
         if success then
-            notifyToast("Success: " .. msg, "success")
+            notifyToast("All Mails Sent Successfully!", "success")
             StatusLabel.Text = "System Ready."
-            populateDropdown()
-            DropdownBtn.Text = "Select an Item..."
-            DropdownBtn.TextColor3 = Colors.TextSecondary
-            selectedItemCleanName = ""
+            currentQueue = {} 
+            renderQueue()
+            populateDropdown() 
         else
             notifyToast("Failed: " .. msg, "error")
             StatusLabel.Text = "System Ready."
+            renderQueue()
         end
         isSending = false
-        SendBtn.Text = "Send Mail"
         tween(SendBtn, {BackgroundColor3 = Colors.Accent}, 0.2)
     end)
 end)
 
 populateDropdown()
+renderQueue()
 toggleUI(true)
